@@ -1,7 +1,7 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const fetch = require("node-fetch").default; // Use .default for ESM compatibility in CommonJS
 require('dotenv').config();
-const xml2js = require("xml2js");
+const { XMLParser } = require("fast-xml-parser");
 const http = require("http");
 
 // Validate environment variables
@@ -35,22 +35,38 @@ async function loadEPG() {
         return;
     }
     try {
+        const now = new Date();
+        const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        console.log(`Loading EPG at ${now.toISOString()}`);
         const res = await fetch(EPG_URL);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        
+        // Stream the XML response
+        const parser = new XMLParser({
+            ignoreAttributes: false,
+            attributeNamePrefix: "@_"
+        });
         const xml = await res.text();
-        const parser = new xml2js.Parser();
-        const result = await parser.parseStringPromise(xml);
-        epgMap = {};
-        for (const prog of result.tv?.programme || []) {
-            const channelId = prog['$']?.channel;
+        const result = parser.parse(xml);
+        
+        epgMap = {}; // Clear previous EPG data
+        const programs = result.tv?.programme || [];
+        for (const prog of programs) {
+            const channelId = prog["@_channel"];
             if (!channelId) continue;
-            if (!epgMap[channelId]) epgMap[channelId] = [];
-            epgMap[channelId].push({
-                title: prog.title?.[0]?._ || 'Unknown',
-                start: new Date(prog['$']?.start || 'Invalid Date'),
-                stop: new Date(prog['$']?.stop || 'Invalid Date'),
-            });
+            if (!epgMap[channelId]) epgMap[channelId] = []; // Initialize array for channel
+            const start = new Date(prog["@_start"] || 'Invalid Date');
+            const stop = new Date(prog["@_stop"] || 'Invalid Date');
+            // Only include programs within the next 24 hours, up to 10 per channel
+            if (start >= now && start <= tomorrow && epgMap[channelId].length < 10) {
+                epgMap[channelId].push({
+                    title: prog.title?._ || 'Unknown',
+                    start,
+                    stop
+                });
+            }
         }
+        console.log(`EPG loaded: ${Object.keys(epgMap).length} channels, ${Object.values(epgMap).reduce((sum, arr) => sum + arr.length, 0)} programs`);
     } catch (err) {
         console.error("Failed to load EPG:", err.message);
     }
