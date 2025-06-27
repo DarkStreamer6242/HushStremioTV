@@ -17,7 +17,7 @@ if (!IPTV_USERNAME || !IPTV_PASSWORD || !IPTV_SERVER) {
 const manifest = {
     id: "org.iptv.custom",
     version: "1.1.0",
-    name: "HushPlusTv",
+    name: "My IPTV Addon with EPG",
     description: "Streams live TV and VOD from your IPTV provider, with optional EPG support",
     catalogs: [{ type: "tv", id: "iptv_live", name: "Live IPTV" }],
     resources: ["catalog", "stream", "meta"],
@@ -71,10 +71,6 @@ async function loadEPG() {
         console.error("Failed to load EPG:", err.message);
     }
 }
-
-// Load EPG on startup and refresh every 24 hours
-loadEPG();
-setInterval(loadEPG, 24 * 60 * 60 * 1000);
 
 builder.defineCatalogHandler(async () => {
     try {
@@ -135,9 +131,20 @@ builder.defineMetaHandler(async ({ id }) => {
     }
 });
 
-// Create HTTP server and set port to 10000
+// Create HTTP server and bind to 0.0.0.0:10000
 const PORT = process.env.PORT || 10000;
 const server = http.createServer(builder.getInterface().middleware);
-server.listen(PORT, () => {
-    console.log(`Add-on server running on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Add-on server running on 0.0.0.0:${PORT}`);
 });
+server.on('error', (err) => {
+    console.error(`Server error: ${err.message}`);
+    if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is in use. Try setting a different PORT in the environment.`);
+        process.exit(1);
+    }
+});
+
+// Load EPG after server starts to avoid delaying HTTP setup
+loadEPG();
+setInterval(loadEPG, 24 * 60 * 60 * 1000);
