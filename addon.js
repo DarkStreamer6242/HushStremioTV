@@ -17,7 +17,7 @@ if (!IPTV_USERNAME || !IPTV_PASSWORD || !IPTV_SERVER) {
 const manifest = {
     id: "org.iptv.custom",
     version: "1.1.0",
-    name: "My IPTV Addon with EPG",
+    name: "HushPlusTv",
     description: "Streams live TV and VOD from your IPTV provider, with optional EPG support",
     catalogs: [{ type: "tv", id: "iptv_live", name: "Live IPTV" }],
     resources: ["catalog", "stream", "meta"],
