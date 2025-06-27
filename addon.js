@@ -8,6 +8,11 @@ const IPTV_PASSWORD = process.env.IPTV_PASS;
 const IPTV_SERVER = process.env.IPTV_SERVER;
 const EPG_URL = process.env.EPG_URL; // Optional: XMLTV URL
 
+// Validate environment variables
+if (!IPTV_USERNAME || !IPTV_PASSWORD || !IPTV_SERVER) {
+    throw new Error("Missing required environment variables: IPTV_USER, IPTV_PASS, or IPTV_SERVER");
+}
+
 const manifest = {
     id: "org.iptv.custom",
     version: "1.1.0",
@@ -24,19 +29,25 @@ const builder = new addonBuilder(manifest);
 let epgMap = {};
 
 async function loadEPG() {
-    if (!EPG_URL) return;
+    if (!EPG_URL) {
+        console.warn("EPG_URL not provided; skipping EPG loading");
+        return;
+    }
     try {
         const res = await fetch(EPG_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const xml = await res.text();
         const parser = new xml2js.Parser();
         const result = await parser.parseStringPromise(xml);
-        for (const prog of result.tv.programme || []) {
-            const channelId = prog['$'].channel;
+        epgMap = {};
+        for (const prog of result.tv?.programme || []) {
+            const channelId = prog['$']?.channel;
+            if (!channelId) continue;
             if (!epgMap[channelId]) epgMap[channelId] = [];
             epgMap[channelId].push({
-                title: prog.title?.[0]?._ || '',
-                start: prog['$'].start,
-                stop: prog['$'].stop,
+                title: prog.title?.[0]?._ || 'Unknown',
+                start: new Date(prog['$']?.start || 'Invalid Date'),
+                stop: new Date(prog['$']?.stop || 'Invalid Date'),
             });
         }
     } catch (err) {
@@ -44,55 +55,67 @@ async function loadEPG() {
     }
 }
 
+// Load EPG on startup and refresh every 24 hours
+loadEPG();
+setInterval(loadEPG, 24 * 60 * 60 * 1000);
+
 builder.defineCatalogHandler(async () => {
-    const url = {IPTV_SERVER}/player_api.php?username=\{IPTV_USERNAME}&password=\{IPTV_PASSWORD}&action=get_live_streams\`;
-    const res = await fetch(url);
-    const data = await res.json();
-
-    const metas = data.map((channel) => ({
-        id: \`iptv_\${channel.stream_id}\`,
-        type: "tv",
-        name: channel.name,
-        poster: channel.stream_icon || null,
-    }));
-
-    return { metas };
+    try {
+        const url = `${IPTV_SERVER}/player_api.php?username=${IPTV_USERNAME}&password=${IPTV_PASSWORD}&action=get_live_streams`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!Array.isArray(data)) throw new Error("Invalid response format from IPTV server");
+        const metas = data.map((channel) => ({
+            id: `iptv_${channel.stream_id}`,
+            type: "tv",
+            name: channel.name || "Unknown Channel",
+            poster: channel.stream_icon || null,
+        }));
+        return { metas };
+    } catch (err) {
+        console.error("Catalog error:", err.message);
+        return { metas: [] };
+    }
 });
 
 builder.defineStreamHandler(async ({ id }) => {
-    const streamId = id.replace("iptv_", "");
-    const streamUrl = \`\${IPTV_SERVER}/live/\${IPTV_USERNAME}/\${IPTV_PASSWORD}/\${streamId}.ts\`;
-
-    return {
-        streams: [{ title: "IPTV Stream", url: streamUrl }],
-    };
+    try {
+        const streamId = id.replace("iptv_", "");
+        if (!streamId) throw new Error("Invalid stream ID");
+        const streamUrl = `${IPTV_SERVER}/live/${IPTV_USERNAME}/${IPTV_PASSWORD}/${streamId}.ts`;
+        return {
+            streams: [{ title: "IPTV Stream", url: streamUrl }],
+        };
+    } catch (err) {
+        console.error("Stream error:", err.message);
+        return { streams: [] };
+    }
 });
 
 builder.defineMetaHandler(async ({ id }) => {
-    const streamId = id.replace("iptv_", "");
-    const meta = {
-        id,
-        type: "tv",
-        name: "IPTV Channel",
-    };
-
-    const epg = epgMap[streamId];
-    if (epg && epg.length) {
-        const now = new Date();
-        const show = epg.find(e => {
-            const start = new Date(e.start.substring(0, 14));
-            const stop = new Date(e.stop.substring(0, 14));
-            return now >= start && now <= stop;
-        });
-        if (show) {
-            meta.description = \`Now Playing: \${show.title}\`;
+    try {
+        const streamId = id.replace("iptv_", "");
+        const meta = {
+            id,
+            type: "tv",
+            name: "IPTV Channel",
+        };
+        const epg = epgMap[streamId];
+        if (epg && epg.length) {
+            const now = new Date();
+            const show = epg.find(e => {
+                return now >= e.start && now <= e.stop && !isNaN(e.start) && !isNaN(e.stop);
+            });
+            if (show) {
+                meta.description = `Now Playing: ${show.title}`;
+            }
         }
+        return { meta };
+    } catch (err) {
+        console.error("Meta error:", err.message);
+        return { meta: { id, type: "tv nano", name: "IPTV Channel" } };
     }
-
-    return { meta };
 });
-
-// Load EPG on startup
-loadEPG();
 
 module.exports = builder.getInterface();
