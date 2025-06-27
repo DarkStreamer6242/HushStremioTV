@@ -1,15 +1,15 @@
 {
-  "name": "my-iptv-addon",
+  "name": "HushPlusTv",
   "version": "1.0.0",
   "description": "Streams live TV and VOD from your IPTV provider",
   "main": "addon.js",
   "scripts": {
-    "start": "node addon.js"
+    "start": "node --max-old-space-size=512 addon.js"
   },
   "dependencies": {
     "node-fetch": "^3.3.2",
     "stremio-addon-sdk": "^1.1.11",
-    "xml2js": "^0.4.23",
+    "fast-xml-parser": "^4.5.0",
     "dotenv": "^16.4.5"
   },
   "engines": {
