@@ -1,0 +1,13 @@
+{
+  "name": "my-iptv-addon",
+  "version": "1.0.0",
+  "description": "Streams live TV and VOD from your IPTV provider",
+  "main": "addon.js",
+  "scripts": {
+    "start": "node addon.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.1",
+    "stremio-addon-sdk": "^1.1.11"
+  }
+}
