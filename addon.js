@@ -45,7 +45,7 @@ async function loadEPG() {
 }
 
 builder.defineCatalogHandler(async () => {
-    const url = \`\${IPTV_SERVER}/player_api.php?username=\${IPTV_USERNAME}&password=\${IPTV_PASSWORD}&action=get_live_streams\`;
+    const url = {IPTV_SERVER}/player_api.php?username=\{IPTV_USERNAME}&password=\{IPTV_PASSWORD}&action=get_live_streams\`;
     const res = await fetch(url);
     const data = await res.json();
 
