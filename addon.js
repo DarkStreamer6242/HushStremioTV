@@ -1,14 +1,15 @@
 const { addonBuilder } = require("stremio-addon-sdk");
-const fetch = require("node-fetch");
+const fetch = require("node-fetch").default; // Use .default for ESM compatibility in CommonJS
 require('dotenv').config();
 const xml2js = require("xml2js");
+const http = require("http");
 
+// Validate environment variables
 const IPTV_USERNAME = process.env.IPTV_USER;
 const IPTV_PASSWORD = process.env.IPTV_PASS;
 const IPTV_SERVER = process.env.IPTV_SERVER;
 const EPG_URL = process.env.EPG_URL; // Optional: XMLTV URL
 
-// Validate environment variables
 if (!IPTV_USERNAME || !IPTV_PASSWORD || !IPTV_SERVER) {
     throw new Error("Missing required environment variables: IPTV_USER, IPTV_PASS, or IPTV_SERVER");
 }
@@ -114,8 +115,13 @@ builder.defineMetaHandler(async ({ id }) => {
         return { meta };
     } catch (err) {
         console.error("Meta error:", err.message);
-        return { meta: { id, type: "tv nano", name: "IPTV Channel" } };
+        return { meta: { id, type: "tv", name: "IPTV Channel" } };
     }
 });
 
-module.exports = builder.getInterface();
+// Create HTTP server and set port to 10000
+const PORT = process.env.PORT || 10000;
+const server = http.createServer(builder.getInterface().middleware);
+server.listen(PORT, () => {
+    console.log(`Add-on server running on port ${PORT}`);
+});
